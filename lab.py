@@ -37,8 +37,8 @@ class Données:
         self.réinitialiser()
     
     def réinitialiser(self):
-        self.position: list = []
-        self.puissance: list = []
+        self.position: list[float] = []
+        self.puissance: list[float] = []
         self.graph = None
     
     @property
@@ -51,12 +51,14 @@ class Données:
         return epsilon
     
     def graphique(self):
-        self.graph = plt.plot(self.position, self.puissance)
+        self.fig = plt.figure()
+        self.ax = plt.plot(self.position, self.puissance)
         plt.ylabel("Puissance (W)")
         plt.xlabel("Position (mm)")
         plt.figtext(0.5, 0.95, '$\\epsilon = {:.2f}$ mm'.format(self.epsilon))
         plt.figtext(0.5, 0.9, '$\\epsilon^2 = {:.2f}$ mm$^2$'.format(self.epsilon**2))
-        plt.show()
+
+        return self.fig, self.ax
     
     def exporter(self):
         cadre = pd.DataFrame({'Position': self.position, 'Puissance': self.puissance})
@@ -123,7 +125,7 @@ class Puissancemètre:
         self.__détecteur.close()
     
     def read(self):
-        return self.__détecteur.ask('READ?')
+        return float(self.__détecteur.ask('READ?'))
 
 
 class Moteur:
@@ -144,7 +146,7 @@ class Moteur:
     def position(self):
         return float(self.__moteur.get_position() / self.pas_par_mm)
 
-    def mesurer(self, détecteur: Puissancemètre, données: Données, dx: float = 5.0):
+    def mesurer(self, détecteur: Puissancemètre, données: Données, dx: float = 6.0):
         nombre_de_pas = dx * self.pas_par_mm #distance a parcourir
         self.__moteur.setup_velocity(0, 250, 100005)
         self.__moteur.move_by(nombre_de_pas) # mouvement
@@ -178,17 +180,18 @@ def lab():
         puissancemètre = Puissancemètre()
         données = Données()
         étage_de_translation.mesurer(puissancemètre, données)
-        données.courriel(*données.exporter())
-        données.graphique()
-    finally:
-        puissancemètre.close()    
+        fig, ax = données.graphique()
+        noms = données.exporter()
+        #données.courriel(*noms)
+        fig.show()
+    finally:    
         étage_de_translation.close()
+        puissancemètre.close()
     
 
 if __name__ == '__main__':
     fenêtre = tk.Tk()
     fenêtre.title('Labo Laser')
-    fenêtre.geometry("300x300+10+20")
 
     bouton_exécuter = tk.Button(fenêtre, text="Executer", fg='black', bg='green',
                                 command=lab, height=10, width=25)
