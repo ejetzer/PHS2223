@@ -19,9 +19,16 @@ from email import encoders
 import usbtmc
 import numpy as np
 import pandas as pd
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from pylablib.devices import Thorlabs as Tl
 #from ThorlabsPM100 import ThorlabsPM100
+
+
+# Configuration spéciale de matplotlib pour afficher des graphiques
+# Tiré de https://pythonprogramming.net/how-to-embed-matplotlib-graph-tkinter-gui/
+mpl.use("TkAgg")
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
 
 
 def trouver_proche(liste: list, valeur: float):
@@ -39,7 +46,6 @@ class Données:
     def réinitialiser(self):
         self.position: list[float] = []
         self.puissance: list[float] = []
-        self.graph = None
 
     @property
     def epsilon(self):
@@ -50,13 +56,12 @@ class Données:
         epsilon = abs(2 * (self.position[point2] - self.position[point1]))
         return epsilon
 
-    def graphique(self):
-        self.fig = plt.figure()
-        self.ax = plt.plot(self.position, self.puissance)
-        plt.ylabel("Puissance (W)")
-        plt.xlabel("Position (mm)")
-        plt.figtext(0.5, 0.95, '$\\epsilon = {:.2f}$ mm'.format(self.epsilon))
-        plt.figtext(0.5, 0.9, '$\\epsilon^2 = {:.2f}$ mm$^2$'.format(self.epsilon**2))
+    def graphique(self, fig: mpl.Figure):
+        ax = fig.plot(self.position, self.puissance)
+        ax.set_ylabel("Puissance (W)")
+        ax.set_xlabel("Position (mm)")
+        #plt.figtext(0.5, 0.95, '$\\epsilon = {:.2f}$ mm'.format(self.epsilon))
+        #plt.figtext(0.5, 0.9, '$\\epsilon^2 = {:.2f}$ mm$^2$'.format(self.epsilon**2))
 
         return self.fig, self.ax
 
@@ -64,10 +69,8 @@ class Données:
         cadre = pd.DataFrame({'Position': self.position, 'Puissance': self.puissance})
 
         temps = time.ctime().replace(':', '_')
-        nom_image = pathlib.Path("~/Desktop/Graph {}.png".format(temps)).expanduser()
         nom_tableur = pathlib.Path("~/Desktop/Data {}.csv".format(temps)).expanduser()
 
-        plt.savefig(nom_image)
         cadre.to_csv(nom_tableur)
 
         return nom_image, nom_tableur
@@ -149,6 +152,10 @@ class Moteur:
     def mesurer(self, détecteur: Puissancemètre, données: Données, dx: float = 6.0):
         nombre_de_pas = dx * self.pas_par_mm #distance a parcourir
         self.__moteur.setup_velocity(0, 250, 100005)
+
+        self.aller(0)
+        self.attendre()
+
         self.__moteur.move_by(nombre_de_pas) # mouvement
 
         données.réinitialiser()
@@ -159,6 +166,9 @@ class Moteur:
                 données.puissance.append(P)
             except Exception as ex:
                 print(ex)
+
+        self.aller(0)
+        self.attendre()
 
     def aller(self, position_finale: float = 0):
         self.__moteur.setup_velocity(0,250,700005)
@@ -182,13 +192,19 @@ class LabGui(tk.Frame):
 
         self.bouton_exécuter = tk.Button(fenêtre, text="Executer", fg='black', bg='green',
                                          command=lab, height=10, width=25)
+        self.figure = mpl.Figure(figsize=(5,5))
+        self.canevas = FigureCanvasTkAgg(self.figure, self)
+        self.outils = NavigationToolbar2TkAgg(self.canevas, self)
 
     def pack(self, *args, **kargs):
         self.bouton_exécuter.pack()
+        self.outils.update()
+        self.canevas.get_tk_widget().pack()
 
         super().pack(*args, **kargs)
 
     def exécuter(self):
+        self.données.réinitialiser()
         self.étage_de_translation.mesurer(self.puissancemètre, self.données)
         fig, ax = self.données.graphique()
         noms = self.données.exporter()
