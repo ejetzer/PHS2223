@@ -32,24 +32,24 @@ def trouver_proche(liste: list, valeur: float):
 
 class Données:
     """Classe *mutable* pour faciliter les opérations entre éléments d'interface."""
-    
+
     def __init__(self):
         self.réinitialiser()
-    
+
     def réinitialiser(self):
         self.position: list[float] = []
         self.puissance: list[float] = []
         self.graph = None
-    
+
     @property
     def epsilon(self):
-        hepsi = max(self.puissance) / 2 
+        hepsi = max(self.puissance) / 2
         va = trouver_proche(self.puissance, hepsi)
         point1 = self.puissance.index(va)
         point2 = self.puissance.index(max(self.puissance))
         epsilon = abs(2 * (self.position[point2] - self.position[point1]))
         return epsilon
-    
+
     def graphique(self):
         self.fig = plt.figure()
         self.ax = plt.plot(self.position, self.puissance)
@@ -59,7 +59,7 @@ class Données:
         plt.figtext(0.5, 0.9, '$\\epsilon^2 = {:.2f}$ mm$^2$'.format(self.epsilon**2))
 
         return self.fig, self.ax
-    
+
     def exporter(self):
         cadre = pd.DataFrame({'Position': self.position, 'Puissance': self.puissance})
 
@@ -69,22 +69,22 @@ class Données:
 
         plt.savefig(nom_image)
         cadre.to_csv(nom_tableur)
-        
+
         return nom_image, nom_tableur
-    
+
     def courriel(self, nom_image: str, nom_tableur: str):
         contenu = "Voici les données du labo laser:"
 
         émmetteur = 'emile.jetzer@polymtl.ca'
         récepteur = 'emile.jetzer@polymtl.ca'
-        
+
         message = MIMEMultipart()
         message['From'] = émmetteur
         message['To'] = récepteur
         message['Subject'] = 'Labo Laser'
-        
+
         message.attach(MIMEText(contenu, 'plain'))
-        
+
         for nom_fichier, nom_joint, type_joint in ((nom_image, 'graphe.png', ('image', 'png')),
                                                    (nom_tableur, 'tableur.csv', ('text', 'csv'))):
             with open(nom_fichier, 'rb') as pièce_jointe:
@@ -93,37 +93,37 @@ class Données:
                 encoders.encode_base64(payload)
                 payload.add_header('Content-Decomposition', 'attachment', filename=nom_joint)
                 message.attach(payload)
-        
+
         serveur = smtplib.SMTP('smtp.polymtl.ca', 25)
         texte = message.as_string()
         serveur.sendmail(émmetteur, récepteur, texte)
 
 class Puissancemètre:
-    
+
     def __init__(self, id_détecteur: tuple[int, int] = None):
         if id_détecteur is None:
             info = str(usbtmc.list_devices()[0]) #liste les appareil connectée
-            
+
             # trouvé les IDs
-            posven = info.find('idVendor') 
-            id_vendeur = info[posven+25:posven+31] 
-            
+            posven = info.find('idVendor')
+            id_vendeur = info[posven+25:posven+31]
+
             pospro = info.find('idProduct')
             id_produit = info[pospro+25:pospro+31]
-            
+
             id_vendeur, id_produit = int(id_vendeur, 16), int(id_produit, 16)
         else:
             id_vendeur, id_produit = id_détecteur
-            
+
         self.__détecteur: usbtmc.Instrument = usbtmc.Instrument(id_vendeur, id_produit) #connection au puissance mètre
         self.open()
-    
+
     def open(self):
         self.__détecteur.open()
-    
+
     def close(self):
         self.__détecteur.close()
-    
+
     def read(self):
         return float(self.__détecteur.ask('READ?'))
 
@@ -132,16 +132,16 @@ class Moteur:
     T = 2048 / 6e6  # constante trouver sur https://www.thorlabs.com/Software/Motion%20Control/APT_Communications_Protocol.pdf
     V = 65536
     pas_par_mm = 34304  # Scaling factor en fonction du moteur
-    
-    
+
+
     def __init__(self, id_moteur=None):
         if id_moteur is None:
             id_moteur = Tl.list_kinesis_devices()[0][0]  # list l'ID du stage
-        
+
         self.__moteur = Tl.KinesisMotor(id_moteur)  # connection du stage
         self.aller(0)
         self.attendre()
-    
+
     @property
     def position(self):
         return float(self.__moteur.get_position() / self.pas_par_mm)
@@ -160,41 +160,51 @@ class Moteur:
             except Exception as ex:
                 print(ex)
 
-        données.graphique()
-    
     def aller(self, position_finale: float = 0):
         self.__moteur.setup_velocity(0,250,700005)
         self.__moteur.move_to(position_finale)
-    
+
     def attendre(self):
         self.__moteur.wait_move()
-    
+
     def close(self):
         self.__moteur.close()
-            
 
 
-def lab():
-    try:
-        étage_de_translation = Moteur()
-        puissancemètre = Puissancemètre()
-        données = Données()
-        étage_de_translation.mesurer(puissancemètre, données)
-        fig, ax = données.graphique()
-        noms = données.exporter()
+class LabGui(tk.Frame):
+
+    def __init__(self, maître: tk.Tk, étage_de_translation: Moteur, puissancemètre: Puissancemètre, données: Données, *args, **kargs):
+        super().__init__(master=maître, *args, **kargs)
+
+        self.étage_de_translation = étage_de_translation
+        self.puissancemètre = puissancemètre
+        self.données = données
+
+        self.bouton_exécuter = tk.Button(fenêtre, text="Executer", fg='black', bg='green',
+                                         command=lab, height=10, width=25)
+
+    def pack(self, *args, **kargs):
+        self.bouton_exécuter.pack()
+
+        super().pack(*args, **kargs)
+
+    def exécuter(self):
+        self.étage_de_translation.mesurer(self.puissancemètre, self.données)
+        fig, ax = self.données.graphique()
+        noms = self.données.exporter()
         #données.courriel(*noms)
-        fig.show()
-    finally:    
-        étage_de_translation.close()
-        puissancemètre.close()
-    
+        #fig.show()
+
+    def destroy(self):
+        self.étage_de_translation.close()
+        self.puissancemètre.close()
+        super().destroy()
+
 
 if __name__ == '__main__':
     fenêtre = tk.Tk()
     fenêtre.title('Labo Laser')
+    interface = LabGui(fenêtre, Moteur(), Puissancemètre(), Données())
 
-    bouton_exécuter = tk.Button(fenêtre, text="Executer", fg='black', bg='green',
-                                command=lab, height=10, width=25)
-
-    bouton_exécuter.pack()
+    LabGui.pack()
     fenêtre.mainloop()
