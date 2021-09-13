@@ -28,7 +28,7 @@ from pylablib.devices import Thorlabs as Tl
 # Configuration spéciale de matplotlib pour afficher des graphiques
 # Tiré de https://pythonprogramming.net/how-to-embed-matplotlib-graph-tkinter-gui/
 mpl.use("TkAgg")
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 
 
 def trouver_proche(liste: list, valeur: float):
@@ -56,7 +56,10 @@ class Données:
         epsilon = abs(2 * (self.position[point2] - self.position[point1]))
         return epsilon
 
-    def graphique(self, fig: mpl.Figure):
+    def graphique(self, fig: plt.Figure):
+        if fig:
+            self.figure = fig
+        
         ax = fig.plot(self.position, self.puissance)
         ax.set_ylabel("Puissance (W)")
         ax.set_xlabel("Position (mm)")
@@ -73,7 +76,7 @@ class Données:
 
         cadre.to_csv(nom_tableur)
 
-        return nom_image, nom_tableur
+        return nom_tableur
 
     def courriel(self, nom_image: str, nom_tableur: str):
         contenu = "Voici les données du labo laser:"
@@ -190,11 +193,10 @@ class LabGui(tk.Frame):
         self.puissancemètre = puissancemètre
         self.données = données
 
-        self.bouton_exécuter = tk.Button(fenêtre, text="Executer", fg='black', bg='green',
-                                         command=lab, height=10, width=25)
-        self.figure = mpl.Figure(figsize=(5,5))
+        self.bouton_exécuter = tk.Button(self, text="Exécuter", command=lambda: self.exécuter())
+        self.figure = plt.Figure(figsize=(10,10))
         self.canevas = FigureCanvasTkAgg(self.figure, self)
-        self.outils = NavigationToolbar2TkAgg(self.canevas, self)
+        self.outils = NavigationToolbar2Tk(self.canevas, self)
 
     def pack(self, *args, **kargs):
         self.bouton_exécuter.pack()
@@ -206,7 +208,7 @@ class LabGui(tk.Frame):
     def exécuter(self):
         self.données.réinitialiser()
         self.étage_de_translation.mesurer(self.puissancemètre, self.données)
-        fig, ax = self.données.graphique()
+        fig, ax = self.données.graphique(self.figure)
         noms = self.données.exporter()
         #données.courriel(*noms)
         #fig.show()
@@ -222,5 +224,5 @@ if __name__ == '__main__':
     fenêtre.title('Labo Laser')
     interface = LabGui(fenêtre, Moteur(), Puissancemètre(), Données())
 
-    LabGui.pack()
+    interface.pack()
     fenêtre.mainloop()
