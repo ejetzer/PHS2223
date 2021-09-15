@@ -81,6 +81,7 @@ class Données:
 
         temps = time.ctime().replace(':', '_')
         nom_dossier = pathlib.Path(f"~/Desktop/Résultats {temps}").expanduser()
+        nom_dossier.mkdir()
         nom_tableur = nom_dossier / f'Données {temps}.csv'
         nom_image = nom_dossier / f'Données {temps}.png'
         
