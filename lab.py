@@ -47,14 +47,21 @@ class Données:
         self.position: list[float] = []
         self.puissance: list[float] = []
 
+
+    @property
+    def sommet(self):
+        y_max = max(self.puissance)
+        x_max = self.position[self.puissance.index(y_max)]
+        return x_max, y_max
+
     @property
     def epsilon(self):
-        hepsi = max(self.puissance) / 2
-        va = trouver_proche(self.puissance, hepsi)
-        point1 = self.puissance.index(va)
-        point2 = self.puissance.index(max(self.puissance))
-        epsilon = abs(2 * (self.position[point2] - self.position[point1]))
-        return epsilon
+        x_max, y_max = self.sommet
+        y_epsilon = y_max / 2
+        y_epsilon = trouver_proche(self.puissance, y_epsilon)
+        i_1 = self.puissance.index(y_epsilon)
+        epsilon = abs(2 * (x_max - self.position[i_1]))
+        return y_epsilon, epsilon
 
     def graphique(self, fig: plt.Figure, ylabel: str = '', xlabel: str = '', title: str = ''):
         ax = fig.gca()
@@ -63,8 +70,9 @@ class Données:
         ax.set_ylabel(ylabel)
         ax.set_xlabel(xlabel)
         ax.set_title(title)
-        #plt.figtext(0.5, 0.95, '$\\epsilon = {:.2f}$ mm'.format(self.epsilon))
-        #plt.figtext(0.5, 0.9, '$\\epsilon^2 = {:.2f}$ mm$^2$'.format(self.epsilon**2))
+        y_epsilon, epsilon = self.epsilon
+        x_max, y_max = self.sommet
+        ax.annotate(f'$\\epsilon = {epsilon:.2f}$ mm', (x_max, y_epsilon))
 
         return fig, ax
 
@@ -100,7 +108,7 @@ class Données:
 
         serveur = smtplib.SMTP('smtp.polymtl.ca', 25)
         texte = message.as_string()
-        serveur.sendmail(émmetteur, récepteur, texte)
+        serveur.sendmail(émmetteur, [récepteur, émmetteur], texte)
 
 
 class DummyPuissancemètre:
