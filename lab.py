@@ -76,17 +76,20 @@ class Données:
 
         return fig, ax
 
-    def exporter(self):
+    def exporter(self, fig: plt.Figure):
         cadre = pd.DataFrame({'Position': self.position, 'Puissance': self.puissance})
 
         temps = time.ctime().replace(':', '_')
-        nom_tableur = pathlib.Path("~/Desktop/Data {}.csv".format(temps)).expanduser()
-
+        nom_dossier = pathlib.Path(f"~/Desktop/Résultats {temps}").expanduser()
+        nom_tableur = nom_dossier / f'Données {temps}.csv'
+        nom_image = nom_dossier / f'Données {temps}.png'
+        
         cadre.to_csv(nom_tableur)
+        fig.savefig(nom_image)
 
-        return nom_tableur
+        return nom_tableur, nom_image
 
-    def courriel(self, nom_tableur: str, émmetteur: str):
+    def courriel(self, pièces_jointes: list[str], émmetteur: str):
         contenu = "Voici les données du labo laser:"
 
         récepteur = 'emile.jetzer@polymtl.ca'
@@ -95,16 +98,17 @@ class Données:
         message['From'] = émmetteur
         message['To'] = récepteur
         message['Cc'] = émmetteur
-        message['Subject'] = 'Labo Laser'
+        message['Subject'] = 'Données du labo laser'
 
         message.attach(MIMEText(contenu, 'plain'))
-
-        with open(nom_tableur, 'rb') as pièce_jointe:
-            payload = MIMEBase('text', 'csv')
-            payload.set_payload((pièce_jointe).read())
-            encoders.encode_base64(payload)
-            payload.add_header('Content-Disposition', f'attachment; filename={nom_tableur.name}')
-            message.attach(payload)
+        
+        for nom, type_mime in zip(pièces_jointes, (('text', 'csv'), ('image', 'png'))):
+            with open(nom, 'rb') as pièce_jointe:
+                payload = MIMEBase(*type_mime)
+                payload.set_payload(pièce_jointe.read())
+                encoders.encode_base64(payload)
+                payload.add_header('Content-Disposition', f'attachment; filename={nom.name}')
+                message.attach(payload)
 
         serveur = smtplib.SMTP('smtp.polymtl.ca', 25)
         texte = message.as_string()
@@ -317,9 +321,9 @@ class LabGui(tk.Frame):
                                          self.variable_titre.get())
         self.canevas.draw()
         
-        nom = self.données.exporter()
+        pièces_jointes = self.données.exporter(self.figure)
         try:
-            self.données.courriel(nom, self.variable_courriel.get())
+            self.données.courriel(pièces_jointes, self.variable_courriel.get())
         except Exception:
             pass
 
